@@ -1,0 +1,4 @@
+# flask
+strawberry-graphql
+psycopg[binary]
+fastapi[standard]
