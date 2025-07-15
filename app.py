@@ -2,6 +2,7 @@ import strawberry
 from strawberry.fastapi import GraphQLRouter
 import psycopg
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 import os
 
@@ -41,6 +42,10 @@ class Query:
     @strawberry.field
     def get_Post( PostId: int) -> PostType:
         return fetch_post_by_id(PostId)
+    
+    @strawberry.field
+    def get_all_posts() -> list[PostType]:
+        return fetch_all_posts()
 
 
 def connect_to_db():
@@ -76,8 +81,28 @@ def fetch_author_by_id(author_id: int) -> UserType:
     if user is None:
         raise Exception("Author not found")
     return UserType(id=author_id, name=user[0], password=user[1])
+
+def fetch_all_posts() -> list[PostType]:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute("SELECT id, TITLE, CONTENT, AUTHOR_ID FROM posts")
+            posts = curr.fetchall()
+    post_list = []
+    for post in posts:
+        author = fetch_author_by_id(post[3])
+        post_list.append(PostType(id=post[0], title=post[1], content=post[2], author=author))
+    return post_list
     
     
 schema = strawberry.Schema(query=Query)
 graph_QL_app = GraphQLRouter(schema)
 app.include_router(graph_QL_app, prefix="/graphql")
+
+
+@app.get("/")
+def homepage():
+    return FileResponse("templates/index.html")
+
+@app.get("/post")
+def post_detail(post_id: int):
+    return FileResponse("templates/post_detail.html")
