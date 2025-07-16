@@ -1,10 +1,12 @@
 import strawberry
 from strawberry.fastapi import GraphQLRouter
 import psycopg
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from dotenv import load_dotenv
 import os
+import secrets
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -47,14 +49,61 @@ class Query:
     def get_all_posts() -> list[PostType]:
         return fetch_all_posts()
 
-
 def connect_to_db():
     return psycopg.connect(**DB_CONFIG)
 
-def validate_session(session_token: str) -> bool:
-    return session_token == "Admin token"
+def create_session(user_id: int) -> str:
+    session_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now() + timedelta(hours=24)  # 24 hour expiry
+    
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "INSERT INTO sessions (token, user_id, expires_at) VALUES (%s, %s, %s)",
+                (session_token, user_id, expires_at)
+            )
+            conn.commit()
+    
+    return session_token
 
-def fetch_user_by_id( UserId: int) -> UserType:
+def validate_session(session_token: str) -> bool:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "SELECT user_id, expires_at FROM sessions WHERE token = %s",
+                (session_token,)
+            )
+            session = curr.fetchone()
+    
+    if session is None:
+        return False
+    
+    # Check if session has expired
+    if datetime.now() > session[1]:
+        # Clean up expired session
+        destroy_session(session_token)
+        return False
+    
+    return True
+
+def get_user_from_session(session_token: str) -> int:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "SELECT user_id FROM sessions WHERE token = %s AND expires_at > %s",
+                (session_token, datetime.now())
+            )
+            result = curr.fetchone()
+    
+    return result[0] if result else None
+
+def destroy_session(session_token: str):
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute("DELETE FROM sessions WHERE token = %s", (session_token,))
+            conn.commit()
+            
+def fetch_user_by_id(UserId: int) -> UserType:
     with connect_to_db() as conn:
         with conn.cursor() as curr:
             curr.execute("SELECT NAME, PASSWORD FROM users WHERE id = %s", (UserId,))
@@ -93,11 +142,9 @@ def fetch_all_posts() -> list[PostType]:
         post_list.append(PostType(id=post[0], title=post[1], content=post[2], author=author))
     return post_list
     
-    
 schema = strawberry.Schema(query=Query)
 graph_QL_app = GraphQLRouter(schema)
 app.include_router(graph_QL_app, prefix="/graphql")
-
 
 @app.get("/")
 def homepage():
@@ -106,3 +153,101 @@ def homepage():
 @app.get("/post")
 def post_detail(post_id: int):
     return FileResponse("templates/post_detail.html")
+
+@app.get("/login")
+def login_page():
+    return FileResponse("templates/login.html")
+
+@app.post("/login")
+def login(request: dict):
+    username = request.get("username")
+    password = request.get("password")
+    
+    user = authenticate_user(username, password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    session_token = create_session(user.id)
+    
+    response = JSONResponse({"user_id": user.id, "message": "Login successful"})
+    response.set_cookie(key="session_token", value=session_token, httponly=True)
+    return response
+
+@app.post("/logout")
+def logout(request: Request):
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        destroy_session(session_token)
+    
+    response = JSONResponse({"message": "Logged out successfully"})
+    response.delete_cookie("session_token")
+    return response
+
+@app.get("/profile")
+def profile(request: Request):
+    session_token = request.cookies.get("session_token")
+    
+    if not session_token or not validate_session(session_token):
+        return RedirectResponse(url="/login", status_code=302)
+     
+    return FileResponse("templates/profile.html")
+
+@app.get("/register")
+def register_page():
+    return FileResponse("templates/register.html")
+
+@app.post("/register")
+def register(request: dict):
+    username = request.get("username")
+    password = request.get("password")
+    confirm_password = request.get("confirm_password")
+    
+    # Basic validation
+    if not username or not password or not confirm_password:
+        raise HTTPException(status_code=400, detail="All fields are required")
+    
+    if password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Check if user already exists
+    if user_exists(username):
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Create new user
+    user_id = create_user(username, password)
+    
+    # Create session for the new user
+    session_token = create_session(user_id)
+    
+    response = JSONResponse({"user_id": user_id, "message": "Registration successful"})
+    response.set_cookie(key="session_token", value=session_token, httponly=True)
+    return response
+
+def user_exists(username: str) -> bool:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute("SELECT id FROM users WHERE name = %s", (username,))
+            return curr.fetchone() is not None
+
+def create_user(username: str, password: str) -> int:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "INSERT INTO users (name, password) VALUES (%s, %s) RETURNING id",
+                (username, password)
+            )
+            user_id = curr.fetchone()[0]
+            conn.commit()
+    return user_id
+
+def authenticate_user(username: str, password: str):
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute("SELECT id, name, password FROM users WHERE name = %s AND password = %s", (username, password))
+            user = curr.fetchone()
+    if user is None:
+        return None
+    return UserType(id=user[0], name=user[1], password=user[2])
