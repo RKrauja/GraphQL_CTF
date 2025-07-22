@@ -48,61 +48,24 @@ class Query:
     @strawberry.field
     def get_all_posts() -> list[PostType]:
         return fetch_all_posts()
+    
+    @strawberry.field
+    def get_users_posts(UserId: int) -> list[PostType]:
+        with connect_to_db() as conn:
+            with conn.cursor() as curr:
+                curr.execute("SELECT id FROM posts WHERE author_id = %s", (UserId,))
+                post_ids = curr.fetchall()
+        if not post_ids:
+            raise Exception("No posts found for this user")
+        posts = []
+        for post_id in post_ids:
+            posts.append(fetch_post_by_id(post_id[0]))
+        return posts
+    
 
 def connect_to_db():
     return psycopg.connect(**DB_CONFIG)
-
-def create_session(user_id: int) -> str:
-    session_token = secrets.token_urlsafe(32)
-    expires_at = datetime.now() + timedelta(hours=24)  # 24 hour expiry
-    
-    with connect_to_db() as conn:
-        with conn.cursor() as curr:
-            curr.execute(
-                "INSERT INTO sessions (token, user_id, expires_at) VALUES (%s, %s, %s)",
-                (session_token, user_id, expires_at)
-            )
-            conn.commit()
-    
-    return session_token
-
-def validate_session(session_token: str) -> bool:
-    with connect_to_db() as conn:
-        with conn.cursor() as curr:
-            curr.execute(
-                "SELECT user_id, expires_at FROM sessions WHERE token = %s",
-                (session_token,)
-            )
-            session = curr.fetchone()
-    
-    if session is None:
-        return False
-    
-    # Check if session has expired
-    if datetime.now() > session[1]:
-        # Clean up expired session
-        destroy_session(session_token)
-        return False
-    
-    return True
-
-def get_user_from_session(session_token: str) -> int:
-    with connect_to_db() as conn:
-        with conn.cursor() as curr:
-            curr.execute(
-                "SELECT user_id FROM sessions WHERE token = %s AND expires_at > %s",
-                (session_token, datetime.now())
-            )
-            result = curr.fetchone()
-    
-    return result[0] if result else None
-
-def destroy_session(session_token: str):
-    with connect_to_db() as conn:
-        with conn.cursor() as curr:
-            curr.execute("DELETE FROM sessions WHERE token = %s", (session_token,))
-            conn.commit()
-            
+        
 def fetch_user_by_id(UserId: int) -> UserType:
     with connect_to_db() as conn:
         with conn.cursor() as curr:
@@ -145,6 +108,10 @@ def fetch_all_posts() -> list[PostType]:
 schema = strawberry.Schema(query=Query)
 graph_QL_app = GraphQLRouter(schema)
 app.include_router(graph_QL_app, prefix="/graphql")
+
+
+
+
 
 @app.get("/")
 def homepage():
@@ -251,3 +218,68 @@ def authenticate_user(username: str, password: str):
     if user is None:
         return None
     return UserType(id=user[0], name=user[1], password=user[2])
+
+def create_session(user_id: int) -> str:
+    session_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now() + timedelta(hours=24) 
+    
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "INSERT INTO sessions (token, user_id, expires_at) VALUES (%s, %s, %s)",
+                (session_token, user_id, expires_at)
+            )
+            conn.commit()
+    
+    return session_token
+
+def validate_session(session_token: str) -> bool:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "SELECT user_id, expires_at FROM sessions WHERE token = %s",
+                (session_token,)
+            )
+            session = curr.fetchone()
+    
+    if session is None:
+        return False
+    
+    # Check if session has expired
+    if datetime.now() > session[1]:
+        # Clean up expired session
+        destroy_session(session_token)
+        return False
+    
+    return True
+
+def get_user_from_session(session_token: str) -> int:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "SELECT user_id FROM sessions WHERE token = %s AND expires_at > %s",
+                (session_token, datetime.now())
+            )
+            result = curr.fetchone()
+    
+    return result[0] if result else None
+
+def destroy_session(session_token: str):
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute("DELETE FROM sessions WHERE token = %s", (session_token,))
+            conn.commit()
+
+@app.get("/api/current-user")
+def get_current_user(request: Request):
+    session_token = request.cookies.get("session_token")
+    
+    if not session_token or not validate_session(session_token):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user_id = get_user_from_session(session_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    user = fetch_user_by_id(user_id)
+    return {"id": user.id, "name": user.name}
