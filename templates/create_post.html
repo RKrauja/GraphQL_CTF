@@ -10,10 +10,8 @@
 </head>
 
 <body>
-    <!-- Navbar Web Component -->
     <navbar-component></navbar-component>
 
-    <!-- Main Content -->
     <div class="container mt-5">
         <div class="row justify-content-center">
             <div class="col-md-8">
@@ -65,18 +63,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/components/navbar.js"></script>
-    <script>
-        let currentUser = null;
+    <script type="module">
+        import { queryGraphQL, showAlert, getCurrentUser } from '/static/helpers/helper_functions.js';
 
-        const showAlert = (message, type = 'danger') => {
-            const alertContainer = document.getElementById('alert-container');
-            alertContainer.innerHTML = `
-                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                    ${message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `;
-        };
+        let currentUser = null;
 
         const setLoading = (loading) => {
             const createBtn = document.getElementById('create-btn');
@@ -89,48 +79,6 @@
             } else {
                 createBtn.disabled = false;
                 createSpinner.classList.add('d-none');
-            }
-        };
-
-        // Use the same getCurrentUser function as profile.html
-        const getCurrentUser = async () => {
-            try {
-                const response = await fetch('/api/current-user', {
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const userData = await response.json();
-                    return userData;
-                } else {
-                    throw new Error('Failed to get current user');
-                }
-            } catch (error) {
-                console.error('Error getting current user:', error);
-                window.location.href = '/login';
-                return null;
-            }
-        };
-
-        // Use the same queryGraphQL function as other templates
-        const queryGraphQL = async (query, variables = {}) => {
-            try {
-                const response = await fetch('/graphql', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        query: query,
-                        variables: variables
-                    })
-                });
-
-                const result = await response.json();
-                console.log('GraphQL response:', result);
-                return result;
-            } catch (error) {
-                console.error('GraphQL query error:', error);
-                throw error;
             }
         };
 
@@ -168,20 +116,17 @@
             }
         };
 
-        // Character counter
         document.getElementById('content').addEventListener('input', (e) => {
             const charCount = e.target.value.length;
             document.getElementById('char-count').textContent = charCount;
         });
 
-        // Form submission
         document.getElementById('create-post-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const title = document.getElementById('title').value.trim();
             const content = document.getElementById('content').value.trim();
 
-            // Client-side validation
             if (!title || !content) {
                 showAlert('Please fill in both title and content.');
                 return;
@@ -205,15 +150,8 @@
             setLoading(true);
 
             try {
-                // Get session token the same way as profile.html - through the API call
-                // The session token will be handled server-side through the /api/current-user endpoint
-                // and the GraphQL mutation will validate the session internally
-
                 const newPost = await createPost(title, content, currentUser.id, 'session_from_cookie');
-
                 showAlert('Post created successfully! Redirecting to your profile...', 'success');
-
-                // Remove redirect delay to match login/register pages
                 window.location.href = '/profile';
 
             } catch (error) {
@@ -224,7 +162,6 @@
             }
         });
 
-        // Load current user when page loads - same pattern as profile.html
         document.addEventListener('DOMContentLoaded', async () => {
             currentUser = await getCurrentUser();
         });
