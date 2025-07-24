@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Post - PostBook</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navbar Web Component -->
+    <navbar-component></navbar-component>
+
+    <!-- Main Content -->
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="mb-3">
+                    <a href="/profile" class="btn btn-outline-primary">← Back to Profile</a>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">Create New Post</h2>
+
+                        <div id="alert-container"></div>
+
+                        <form id="create-post-form">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Post Title</label>
+                                <input type="text" class="form-control" id="title" name="title" required
+                                    placeholder="Enter your post title">
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="content" class="form-label">Post Content</label>
+                                <textarea class="form-control" id="content" name="content" rows="8" required
+                                    placeholder="Write your post content here..."></textarea>
+                                <div class="form-text">
+                                    <span id="char-count">0</span> characters
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="button" class="btn btn-outline-secondary me-md-2"
+                                    onclick="window.location.href='/profile'">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="btn btn-primary" id="create-btn">
+                                    <span id="create-text">
+                                        <i class="bi bi-plus-circle"></i> Create Post
+                                    </span>
+                                    <span id="create-spinner" class="spinner-border spinner-border-sm d-none ms-2"
+                                        role="status"></span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/components/navbar.js"></script>
+    <script>
+        let currentUser = null;
+
+        const showAlert = (message, type = 'danger') => {
+            const alertContainer = document.getElementById('alert-container');
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        };
+
+        const setLoading = (loading) => {
+            const createBtn = document.getElementById('create-btn');
+            const createText = document.getElementById('create-text');
+            const createSpinner = document.getElementById('create-spinner');
+
+            if (loading) {
+                createBtn.disabled = true;
+                createSpinner.classList.remove('d-none');
+            } else {
+                createBtn.disabled = false;
+                createSpinner.classList.add('d-none');
+            }
+        };
+
+        // Use the same getCurrentUser function as profile.html
+        const getCurrentUser = async () => {
+            try {
+                const response = await fetch('/api/current-user', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const userData = await response.json();
+                    return userData;
+                } else {
+                    throw new Error('Failed to get current user');
+                }
+            } catch (error) {
+                console.error('Error getting current user:', error);
+                window.location.href = '/login';
+                return null;
+            }
+        };
+
+        // Use the same queryGraphQL function as other templates
+        const queryGraphQL = async (query, variables = {}) => {
+            try {
+                const response = await fetch('/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        variables: variables
+                    })
+                });
+
+                const result = await response.json();
+                console.log('GraphQL response:', result);
+                return result;
+            } catch (error) {
+                console.error('GraphQL query error:', error);
+                throw error;
+            }
+        };
+
+        const createPost = async (title, content, authorId, sessionToken) => {
+            const mutation = `
+                mutation CreatePost($title: String!, $content: String!, $authorId: Int!, $sessionToken: String!) {
+                    createPost(title: $title, content: $content, authorId: $authorId, sessionToken: $sessionToken) {
+                        id
+                        title
+                        content
+                        author {
+                            id
+                            name
+                        }
+                    }
+                }
+            `;
+
+            try {
+                const result = await queryGraphQL(mutation, {
+                    title: title,
+                    content: content,
+                    authorId: authorId,
+                    sessionToken: sessionToken
+                });
+
+                if (result.errors) {
+                    throw new Error(result.errors[0].message);
+                }
+
+                return result.data.createPost;
+            } catch (error) {
+                console.error('Error creating post:', error);
+                throw error;
+            }
+        };
+
+        // Character counter
+        document.getElementById('content').addEventListener('input', (e) => {
+            const charCount = e.target.value.length;
+            document.getElementById('char-count').textContent = charCount;
+        });
+
+        // Form submission
+        document.getElementById('create-post-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const title = document.getElementById('title').value.trim();
+            const content = document.getElementById('content').value.trim();
+
+            // Client-side validation
+            if (!title || !content) {
+                showAlert('Please fill in both title and content.');
+                return;
+            }
+
+            if (title.length < 3) {
+                showAlert('Title must be at least 3 characters long.');
+                return;
+            }
+
+            if (content.length < 10) {
+                showAlert('Content must be at least 10 characters long.');
+                return;
+            }
+
+            if (!currentUser) {
+                showAlert('User not found. Please refresh the page.');
+                return;
+            }
+
+            setLoading(true);
+
+            try {
+                // Get session token the same way as profile.html - through the API call
+                // The session token will be handled server-side through the /api/current-user endpoint
+                // and the GraphQL mutation will validate the session internally
+
+                const newPost = await createPost(title, content, currentUser.id, 'session_from_cookie');
+
+                showAlert('Post created successfully! Redirecting to your profile...', 'success');
+
+                // Remove redirect delay to match login/register pages
+                window.location.href = '/profile';
+
+            } catch (error) {
+                console.error('Create post error:', error);
+                showAlert(error.message || 'Failed to create post. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // Load current user when page loads - same pattern as profile.html
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentUser = await getCurrentUser();
+        });
+    </script>
+</body>
+
+</html>

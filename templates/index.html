@@ -20,18 +20,8 @@
 </head>
 
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">PostBook</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">Home</a>
-                <a class="nav-link" href="/profile">Profile</a>
-                <a class="nav-link" href="/login">Login</a>
-                <a class="nav-link" href="/register">Register</a>
-            </div>
-        </div>
-    </nav>
+    <!-- Navbar Web Component -->
+    <navbar-component></navbar-component>
 
     <!-- Main Content -->
     <div class="container mt-4">
@@ -42,7 +32,9 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/components/navbar.js"></script>
     <script>
+        // GraphQL functionality
         const queryGraphQL = async (query, variables = {}) => {
             try {
                 const response = await fetch('/graphql', {
@@ -57,7 +49,6 @@
                 });
 
                 const result = await response.json();
-                console.log('GraphQL response:', result);
                 return result;
             } catch (error) {
                 console.error('GraphQL query error:', error);
@@ -94,7 +85,6 @@
         // Load posts when page loads
         document.addEventListener('DOMContentLoaded', async () => {
             const posts = await fetchAllPosts();
-            console.log(posts); // Log the posts to the console
             const postListContainer = document.getElementById('post-list');
 
             posts.forEach(post => {

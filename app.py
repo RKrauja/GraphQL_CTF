@@ -3,9 +3,11 @@ from strawberry.fastapi import GraphQLRouter
 import psycopg
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
 import secrets
+import base64
 from datetime import datetime, timedelta
 
 load_dotenv()
@@ -24,7 +26,18 @@ app = FastAPI()
 class UserType:
     id: int
     name: str
-    password: str
+    # password: str
+    
+    def __init__(self, id: int, name: str, password: str):
+        self.id = id
+        self.name = name
+        self._password = password 
+
+    @strawberry.field(description="Base64-encoded username:password blob (auth token)")
+    def hashed_password(self) -> str:
+        raw = f"{self.name}:{self._password}"
+        return base64.b64encode(raw.encode()).decode()
+
 
 @strawberry.type
 class PostType:
@@ -39,6 +52,9 @@ class Query:
     def get_User( UserId: int, session_token: str) -> UserType:
         if not validate_session(session_token):
             raise Exception("Invalid session token")
+        user_id = get_user_from_session(session_token)
+        if user_id != 1:
+            raise Exception("Unauthorized access to user data")
         return fetch_user_by_id(UserId)
     
     @strawberry.field
@@ -104,8 +120,34 @@ def fetch_all_posts() -> list[PostType]:
         author = fetch_author_by_id(post[3])
         post_list.append(PostType(id=post[0], title=post[1], content=post[2], author=author))
     return post_list
+
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    def create_post(title: str, content: str, author_id: int, session_token: str) -> PostType:
+        if not validate_session(session_token):
+            raise Exception("Invalid session token")
+        if not validate_author(author_id, session_token):
+            raise Exception("Author id does not match session user")
+        post_id = insert_post(title, content, author_id)
+        return fetch_post_by_id(post_id)
     
-schema = strawberry.Schema(query=Query)
+def insert_post(title: str, content: str, author_id: int) -> int:
+    with connect_to_db() as conn:
+        with conn.cursor() as curr:
+            curr.execute(
+                "INSERT INTO posts (title, content, author_id) VALUES (%s, %s, %s) RETURNING id",
+                (title, content, author_id)
+            )
+            post_id = curr.fetchone()[0]
+            conn.commit()
+    return post_id
+
+def validate_author(author_id: int, session_token: str) -> bool:
+    user_id = get_user_from_session(session_token)
+    return user_id == author_id
+
+schema = strawberry.Schema(query=Query, mutation=Mutation)
 graph_QL_app = GraphQLRouter(schema)
 app.include_router(graph_QL_app, prefix="/graphql")
 
@@ -122,7 +164,11 @@ def post_detail(post_id: int):
     return FileResponse("templates/post_detail.html")
 
 @app.get("/login")
-def login_page():
+def login_page(request: Request):
+    session_token = request.cookies.get("session_token")
+    
+    if session_token and validate_session(session_token):
+        return RedirectResponse(url="/", status_code=302)
     return FileResponse("templates/login.html")
 
 @app.post("/login")
@@ -192,6 +238,31 @@ def register(request: dict):
     response = JSONResponse({"user_id": user_id, "message": "Registration successful"})
     response.set_cookie(key="session_token", value=session_token, httponly=True)
     return response
+
+@app.get("/api/current-user")
+def get_current_user(request: Request):
+    session_token = request.cookies.get("session_token")
+    
+    if not session_token or not validate_session(session_token):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user_id = get_user_from_session(session_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    user = fetch_user_by_id(user_id)
+    return {"id": user.id, "name": user.name}
+
+
+
+@app.get("/create-post")
+def create_post_page(request: Request):
+    session_token = request.cookies.get("session_token")
+    
+    if not session_token or not validate_session(session_token):
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return FileResponse("templates/create_post.html")
 
 def user_exists(username: str) -> bool:
     with connect_to_db() as conn:
@@ -270,16 +341,7 @@ def destroy_session(session_token: str):
             curr.execute("DELETE FROM sessions WHERE token = %s", (session_token,))
             conn.commit()
 
-@app.get("/api/current-user")
-def get_current_user(request: Request):
-    session_token = request.cookies.get("session_token")
-    
-    if not session_token or not validate_session(session_token):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    user_id = get_user_from_session(session_token)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    user = fetch_user_by_id(user_id)
-    return {"id": user.id, "name": user.name}
+
+
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
