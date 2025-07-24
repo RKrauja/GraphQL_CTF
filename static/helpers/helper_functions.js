@@ -36,25 +36,7 @@ export const showAlert = (message, type = 'danger') => {
     }
 };
 
-// // Loading state management for buttons
-// export const setButtonLoading = (buttonId, textId, spinnerId, loading, loadingText = 'Loading...') => {
-//     const button = document.getElementById(buttonId);
-//     const text = document.getElementById(textId);
-//     const spinner = document.getElementById(spinnerId);
 
-//     if (button && text && spinner) {
-//         if (loading) {
-//             button.disabled = true;
-//             if (loadingText !== text.textContent) {
-//                 text.textContent = loadingText;
-//             }
-//             spinner.classList.remove('d-none');
-//         } else {
-//             button.disabled = false;
-//             spinner.classList.add('d-none');
-//         }
-//     }
-// };
 
 // Get current user from session
 export const getCurrentUser = async () => {

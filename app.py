@@ -148,12 +148,12 @@ def validate_author(author_id: int, session_token: str) -> bool:
     return user_id == author_id
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
-graph_QL_app = GraphQLRouter(schema)
+graph_QL_app = GraphQLRouter(
+    schema, 
+    graphiql=False,  # Disable GraphiQL interface
+    # introspection=True, # Keep this vulnerable so the client can send requests
+)
 app.include_router(graph_QL_app, prefix="/graphql")
-
-
-
-
 
 @app.get("/")
 def homepage():

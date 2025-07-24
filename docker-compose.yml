@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: "user"
       POSTGRES_PASSWORD: "password"
       POSTGRES_DB: "graphql_db"
-    ports:
-      - "5432:5432"
     volumes:
       - "pgdata:/var/lib/postgresql/pgdata"
       - "./DB_config.sql:/docker-entrypoint-initdb.d/init.sql"
