@@ -8,6 +8,7 @@ export const queryGraphQL = async (query, variables = {}) => {
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include', // Include cookies for session management
             body: JSON.stringify({
                 query: query,
                 variables: variables
@@ -15,7 +16,6 @@ export const queryGraphQL = async (query, variables = {}) => {
         });
 
         const result = await response.json();
-        console.log('GraphQL response:', result);
         return result;
     } catch (error) {
         console.error('GraphQL query error:', error);

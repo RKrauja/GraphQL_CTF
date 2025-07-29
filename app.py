@@ -1,5 +1,7 @@
 import strawberry
 from strawberry.fastapi import GraphQLRouter
+from strawberry.types import Info
+from strawberry.fastapi.context import BaseContext
 import psycopg
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -21,6 +23,15 @@ DB_CONFIG = {
 }
 
 app = FastAPI()
+
+
+class CustomContext(BaseContext):
+    def __init__(self, request: Request):
+        self.request = request
+
+def get_context(request: Request) -> CustomContext:
+    return CustomContext(request=request)
+
 
 @strawberry.type
 class UserType:
@@ -49,12 +60,12 @@ class PostType:
 @strawberry.type
 class Query:
     @strawberry.field
-    def get_User( UserId: int, session_token: str) -> UserType:
-        if not validate_session(session_token):
-            raise Exception("Invalid session token")
-        user_id = get_user_from_session(session_token)
-        if user_id != 1:
-            raise Exception("Unauthorized access to user data")
+    def get_User(info: Info, UserId: int) -> UserType:
+        request = info.context.request
+        session_token = request.cookies.get("session_token")
+        session_user_id = validate_session(session_token)
+        if session_user_id != 1:
+            raise Exception("Unauthorized access to detailed user data")
         return fetch_user_by_id(UserId)
     
     @strawberry.field
@@ -124,7 +135,9 @@ def fetch_all_posts() -> list[PostType]:
 @strawberry.type
 class Mutation:
     @strawberry.mutation
-    def create_post(title: str, content: str, author_id: int, session_token: str) -> PostType:
+    def create_post(title: str, content: str, author_id: int, info: Info) -> PostType:
+        request = info.context.request
+        session_token = request.cookies.get("session_token")
         if not validate_session(session_token):
             raise Exception("Invalid session token")
         if not validate_author(author_id, session_token):
@@ -150,8 +163,8 @@ def validate_author(author_id: int, session_token: str) -> bool:
 schema = strawberry.Schema(query=Query, mutation=Mutation)
 graph_QL_app = GraphQLRouter(
     schema, 
-    graphiql=False,  # Disable GraphiQL interface
-    # introspection=True, # Keep this vulnerable so the client can send requests
+    graphiql=False,  #interface
+    context_getter=get_context,  # Custom context for request handling
 )
 app.include_router(graph_QL_app, prefix="/graphql")
 
@@ -304,7 +317,7 @@ def create_session(user_id: int) -> str:
     
     return session_token
 
-def validate_session(session_token: str) -> bool:
+def validate_session(session_token: str) -> int:
     with connect_to_db() as conn:
         with conn.cursor() as curr:
             curr.execute(
@@ -314,15 +327,13 @@ def validate_session(session_token: str) -> bool:
             session = curr.fetchone()
     
     if session is None:
-        return False
+        return None
     
-    # Check if session has expired
     if datetime.now() > session[1]:
-        # Clean up expired session
         destroy_session(session_token)
-        return False
+        return None
     
-    return True
+    return session[0] 
 
 def get_user_from_session(session_token: str) -> int:
     with connect_to_db() as conn:

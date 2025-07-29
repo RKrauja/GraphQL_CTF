@@ -82,10 +82,10 @@
             }
         };
 
-        const createPost = async (title, content, authorId, sessionToken) => {
+        const createPost = async (title, content, authorId) => {
             const mutation = `
-                mutation CreatePost($title: String!, $content: String!, $authorId: Int!, $sessionToken: String!) {
-                    createPost(title: $title, content: $content, authorId: $authorId, sessionToken: $sessionToken) {
+                mutation CreatePost($title: String!, $content: String!, $authorId: Int!) {
+                    createPost(title: $title, content: $content, authorId: $authorId) {
                         id
                         title
                         content
@@ -102,7 +102,6 @@
                     title: title,
                     content: content,
                     authorId: authorId,
-                    sessionToken: sessionToken
                 });
 
                 if (result.errors) {
@@ -150,7 +149,7 @@
             setLoading(true);
 
             try {
-                const newPost = await createPost(title, content, currentUser.id, 'session_from_cookie');
+                const newPost = await createPost(title, content, currentUser.id);
                 showAlert('Post created successfully! Redirecting to your profile...', 'success');
                 window.location.href = '/profile';
 

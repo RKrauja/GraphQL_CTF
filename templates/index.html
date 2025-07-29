@@ -56,7 +56,6 @@
             }
         }
 
-        // Load posts when page loads
         document.addEventListener('DOMContentLoaded', async () => {
             const posts = await fetchAllPosts();
             const postListContainer = document.getElementById('post-list');

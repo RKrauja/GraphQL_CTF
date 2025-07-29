@@ -171,7 +171,6 @@
                 }
                 return result.data.getUsersPosts || [];
             } catch (error) {
-                console.error('Error fetching user posts:', error);
                 throw error;
             }
         };
@@ -179,7 +178,6 @@
         const displayUserInfo = (user) => {
             document.getElementById('user-name').textContent = user.name;
 
-            // Create user initials for avatar
             const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
             document.getElementById('user-avatar').textContent = initials;
         };
@@ -250,6 +248,25 @@
                 if (!currentUser) {
                     return;
                 }
+                try {
+                    const adminQuery = `
+                        query GetDetailedUserInfo($userId: Int!) {
+                            getUser(UserId: $userId) {
+                                id
+                                name
+                                hashedPassword
+                            }
+                        }
+                    `;
+
+                    const adminResult = await queryGraphQL(adminQuery, {
+                        userId: currentUser.id,
+                    });
+
+                    // console.log('Enhanced profile data loaded:', adminResult);
+                } catch (adminError) {
+                    console.debug('Enhanced profile data requires admin privileges');
+                }
 
                 displayUserInfo(currentUser);
 
@@ -258,7 +275,6 @@
                 displayPosts(posts);
 
             } catch (error) {
-                console.error('Error loading user data:', error);
                 hideAllStates();
                 showError(error.message || 'Failed to load profile data');
             }
@@ -294,6 +310,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadUserData();
         });
+
+        window.loadUserData = loadUserData;
+        window.refreshPosts = refreshPosts;
+        window.logout = logout;
+
     </script>
 </body>
 
