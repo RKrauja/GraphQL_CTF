@@ -59,13 +59,11 @@ class NavbarComponent extends HTMLElement {
         `;
     }
 
-    // Method to refresh navbar (useful after login/logout)
     async refresh() {
         await this.loadNavbar();
     }
 }
 
-// Global logout function
 window.navbarLogout = async () => {
     try {
         const response = await fetch('/logout', {

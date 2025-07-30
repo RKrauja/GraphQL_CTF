@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS posts (
 
 -- Insert sample data
 INSERT INTO users (name, password) VALUES 
-    ('John Doe', 'secret'),
+    ('John Doe&Admin User', 'U89:0^$v==6S""j^Uf6d'),
     ('Jane Smith', 'password123'),
     ('Bob Johnson', 'mypassword'),
     ('Alice Williams', 'alicepass'),
@@ -40,7 +40,7 @@ INSERT INTO users (name, password) VALUES
     ('Michael Lee', 'michaelpw'),
     ('Linda Kim', 'lindakim2025'),
     ('Chris Evans', 'chrisevans321'),
-    ('Olivia Harris', 'flag{WASNTTHISASHITSHOW}'), -- Here is the flag
+    ('Børge Smørrebrødsen', 'flag{WASNTTHISASHITSHOW}'), -- Here is the flag
     ('Ethan Wright', 'ethanwright'),
     ('Grace Hall', 'gracehall'),
     ('Ryan King', 'ryanking'),
