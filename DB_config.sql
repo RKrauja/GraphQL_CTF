@@ -40,7 +40,7 @@ INSERT INTO users (name, password) VALUES
     ('Michael Lee', 'michaelpw'),
     ('Linda Kim', 'lindakim2025'),
     ('Chris Evans', 'chrisevans321'),
-    ('Børge Smørrebrødsen', 'flag{WASNTTHISASHITSHOW}'), -- Here is the flag
+    ('Børge Smørrebrødsen', 'FIRE{W45N7TH154SH17SH0W}'), -- Here is the flag
     ('Ethan Wright', 'ethanwright'),
     ('Grace Hall', 'gracehall'),
     ('Ryan King', 'ryanking'),

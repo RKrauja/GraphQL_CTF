@@ -1,0 +1,33 @@
+docker-push-to-gitlab-registery:
+  image: docker:latest
+  stage: build
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build --pull -f Dockerfile -t "$GITLAB_REGISTERY/haaukins/web-exploitation/PostbookSideDoor" .
+    - docker push "$GITLAB_REGISTERY/haaukins/web-exploitation/PostbookSideDoor"
+  only:
+    - main
+
+push-to-challenge-service:
+  image: ubuntu:latest
+  stage: build
+  before_script:
+    - apt-get update -y
+    - apt-get install -y wget
+    - apt-get install -y zip
+    - wget https://github.com/mrtrkmnhub/cservice-cli/releases/download/1.0.0/cservice-cli_1.0.0_linux_64-bit.zip
+    - unzip cservice-cli_1.0.0_linux_64-bit.zip
+    - mv cservice-cli_1.0.0_linux_64-bit/main .
+    - chmod +x ./main
+  script:
+    - ./main
+  only:
+    - master
+  variables:
+    ENDPOINT: "$ENDPOINT"
+    PORT: "$PORT"
+    AUTH_KEY: "$AUTH_KEY"
+    SIGN_KEY: "$SIGN_KEY"
